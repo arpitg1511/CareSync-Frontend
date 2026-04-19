@@ -2,33 +2,66 @@ import React, { useState, useEffect } from 'react';
 import { 
   Calendar, 
   Clock, 
+  User, 
+  TrendingUp, 
+  Search, 
   MapPin, 
-  ChevronRight, 
-  AlertCircle,
-  CheckCircle2,
+  CheckCircle2, 
   XCircle,
-  CreditCard,
-  FileText,
-  Stethoscope
+  Stethoscope,
+  Filter,
+  DollarSign
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { appointmentService } from '../services/appointment.service';
+import { providerService } from '../services/provider.service';
+import { paymentService } from '../services/payment.service';
 import useAuthStore from '../store/useAuthStore';
 
 export const Appointments = () => {
   const [appointments, setAppointments] = useState([]);
+  const [stats, setStats] = useState({ totalCount: 0 });
+  const [earnings, setEarnings] = useState({ totalEarnings: 0 });
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('ALL'); 
   const { user } = useAuthStore();
+
+  const isDoctor = user?.role === 'DOCTOR' || user?.role === 'ROLE_DOCTOR';
 
   useEffect(() => {
     if (user) fetchAppointments();
-  }, [user]);
+  }, [user, filter]);
 
   const fetchAppointments = async () => {
+    setLoading(true);
     try {
-      const res = await appointmentService.getMyList();
-      setAppointments(res.data);
+      if (isDoctor) {
+        const providerRes = await providerService.getAll();
+        const myProfile = providerRes.data.find(p => p.email === user.email);
+        if (myProfile) {
+          try {
+            const statsRes = await appointmentService.getCount(myProfile.providerId);
+            setStats(statsRes.data);
+          } catch (e) { console.error("Stats error", e); }
+
+          try {
+             const earningsRes = await paymentService.getEarnings(myProfile.providerId);
+             setEarnings(earningsRes.data);
+          } catch (e) {
+             console.warn("Payment service offline");
+          }
+
+          let res;
+          if (filter === 'PENDING') res = await appointmentService.getPendingByProvider(myProfile.providerId);
+          else if (filter === 'COMPLETED') res = await appointmentService.getCompletedByProvider(myProfile.providerId);
+          else res = await appointmentService.getByProvider(myProfile.providerId);
+          setAppointments(res.data);
+        }
+      } else {
+        const res = await appointmentService.getByUser(user.id);
+        setAppointments(res.data);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -36,97 +69,98 @@ export const Appointments = () => {
     }
   };
 
-  const handleCancel = async (id) => {
-    if (!window.confirm('Are you sure you want to cancel this appointment?')) return;
-    try {
-      await appointmentService.cancel(id);
-      fetchAppointments();
-    } catch (err) {
-      alert('Failed to cancel appointment');
-    }
-  };
-
-  const getStatusBadge = (status) => {
-    const configs = {
-      CONFIRMED: { color: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800', icon: <CheckCircle2 size={12} className="mr-1.5" /> },
-      PENDING: { color: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-100 dark:border-amber-800', icon: <Clock size={12} className="mr-1.5" /> },
-      CANCELLED: { color: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-100 dark:border-red-800', icon: <XCircle size={12} className="mr-1.5" /> },
-      COMPLETED: { color: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-100 dark:border-red-800', icon: <FileText size={12} className="mr-1.5" /> },
-    };
-    const config = configs[status] || configs.PENDING;
-    return (
-      <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tight border ${config.color}`}>
-        {config.icon} {status}
-      </span>
-    );
+  const statusColors = {
+    PENDING: 'bg-amber-500',
+    COMPLETED: 'bg-emerald-500',
+    CANCELLED: 'bg-rose-500',
+    DEFAULT: 'bg-zinc-500'
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-12 space-y-10 overflow-x-hidden w-full">
+    <div className="max-w-7xl mx-auto px-4 py-12 space-y-12">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
-          <h1 className="text-3xl md:text-4xl font-black text-zinc-900 dark:text-white tracking-tight text-left">Deployment Queue</h1>
-          <p className="text-zinc-500 dark:text-zinc-400 font-bold mt-1 text-left">Status of scheduled synchronize events with medical entities.</p>
+          <h1 className="text-4xl font-black text-zinc-900 dark:text-white tracking-tight">Appointments</h1>
+          <p className="text-zinc-500 dark:text-zinc-400 font-bold mt-1">Manage and track your clinical interactions.</p>
         </div>
-        <Button onClick={() => window.location.href = '/doctors'} className="rounded-xl px-8 shadow-xl hover:shadow-red-500/20">Initialize New Request</Button>
+        
+        {isDoctor && (
+          <div className="flex gap-2">
+             {['ALL', 'PENDING', 'COMPLETED'].map(f => (
+               <button 
+                 key={f} 
+                 onClick={() => setFilter(f)}
+                 className={`px-4 py-2 rounded-xl font-bold text-xs transition-colors ${filter === f ? 'bg-red-600 text-white shadow-lg shadow-red-500/20' : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-500 hover:bg-zinc-200'}`}
+               >
+                 {f}
+               </button>
+             ))}
+          </div>
+        )}
       </div>
+
+      {isDoctor && (
+        <div className="grid md:grid-cols-3 gap-6">
+           <Card className="p-6 bg-zinc-900 border-none rounded-3xl relative overflow-hidden">
+              <p className="text-[10px] font-black uppercase text-zinc-500 mb-2">Completion Rate</p>
+              <h3 className="text-4xl font-black text-white">{(stats.totalCount > 0 ? (appointments.filter(a => a.status === 'COMPLETED').length / stats.totalCount * 100).toFixed(0) : 0)}%</h3>
+              <div className="mt-4 flex items-center text-[10px] font-black text-emerald-500 uppercase">
+                 <TrendingUp size={12} className="mr-2" /> Verified Operations
+              </div>
+           </Card>
+           <Card className="p-6 bg-red-600 border-none rounded-3xl text-white shadow-xl shadow-red-500/20">
+              <p className="text-[10px] font-black uppercase text-red-200 mb-2">Total Earnings</p>
+              <h3 className="text-4xl font-black">${earnings.totalEarnings || '0.00'}</h3>
+              <div className="mt-4 flex items-center text-[10px] font-black text-white/60 uppercase">
+                 <DollarSign size={12} className="mr-2" /> Verified Payments
+              </div>
+           </Card>
+           <Card className="p-6 bg-white dark:bg-zinc-900 border-zinc-100 dark:border-zinc-800 rounded-3xl shadow-xl">
+              <p className="text-[10px] font-black uppercase text-zinc-400 mb-2">Total Patients</p>
+              <h3 className="text-4xl font-black text-zinc-900 dark:text-white">{stats.totalCount || 0}</h3>
+              <div className="mt-4 flex items-center text-[10px] font-black text-zinc-400 uppercase">
+                 <User size={12} className="mr-2 text-red-600" /> Lifetime Records
+              </div>
+           </Card>
+        </div>
+      )}
 
       {loading ? (
         <div className="space-y-6">
-          {[1,2,3].map(i => <div key={i} className="h-44 bg-zinc-100 dark:bg-zinc-900/50 animate-pulse rounded-[2.5rem] border border-zinc-200 dark:border-zinc-800" />)}
+          {[1,2,3].map(i => <div key={i} className="h-40 bg-zinc-100 dark:bg-zinc-900/50 animate-pulse rounded-3xl border border-zinc-100 dark:border-zinc-800" />)}
+        </div>
+      ) : appointments.length === 0 ? (
+        <div className="py-20 text-center bg-zinc-50 dark:bg-zinc-900/10 rounded-[2rem] border-2 border-dashed border-zinc-200 dark:border-zinc-800">
+           <Calendar className="w-12 h-12 text-zinc-200 dark:text-zinc-800 mx-auto mb-4" />
+           <p className="text-zinc-400 font-bold">No appointments found</p>
         </div>
       ) : (
-        <div className="grid gap-6 w-full">
+        <div className="space-y-4">
           {appointments.map(apt => (
-            <Card key={apt.appointmentId} className="hover:shadow-2xl hover:border-red-500/30 transition-all rounded-[2.5rem] bg-white dark:bg-zinc-900 p-0 overflow-hidden border-zinc-200 dark:border-zinc-800 w-full">
-               <div className="flex flex-col md:flex-row w-full">
-                  {/* Status & Date */}
-                  <div className="p-8 md:w-64 bg-zinc-50 dark:bg-zinc-800/10 flex flex-col justify-center items-center text-center border-b md:border-b-0 md:border-r border-zinc-100 dark:border-zinc-800">
-                      <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] mb-3">SYNC POINT</p>
-                      <p className="text-4xl font-black text-zinc-900 dark:text-white tracking-tighter">{new Date(apt.appointmentDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short' }).toUpperCase()}</p>
-                      <p className="text-xs font-bold text-zinc-400 mt-1">{new Date(apt.appointmentDate).getFullYear()}</p>
-                      <div className="mt-6">
-                         {getStatusBadge(apt.status)}
-                      </div>
+            <Card key={apt.appointmentId} className="hover:border-red-600/30 transition-all rounded-3xl border-transparent bg-white dark:bg-zinc-900 shadow-xl p-6 md:p-8">
+              <div className="flex flex-col md:flex-row justify-between md:items-center gap-6">
+                <div className="flex items-center space-x-6">
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg ${statusColors[apt.status] || statusColors.DEFAULT}`}>
+                    <Calendar size={28} />
                   </div>
+                  <div className="space-y-1">
+                     <div className="flex items-center gap-3">
+                        <h3 className="text-xl font-black text-zinc-900 dark:text-white uppercase tracking-tight">{isDoctor ? apt.patientName : apt.providerName}</h3>
+                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase text-white ${statusColors[apt.status] || statusColors.DEFAULT}`}>
+                          {apt.status}
+                        </span>
+                     </div>
+                     <div className="flex items-center space-x-4 text-xs font-bold text-zinc-400">
+                        <div className="flex items-center"><Clock size={14} className="mr-1.5 text-red-600" /> {apt.date} @ {apt.timeSlot}</div>
+                        <div className="flex items-center"><MapPin size={14} className="mr-1.5 text-red-600" /> Clinic</div>
+                     </div>
+                  </div>
+                </div>
 
-                  {/* Doctor Info */}
-                  <div className="p-10 flex-grow font-sans min-w-0">
-                      <div className="flex justify-between items-start mb-6">
-                          <div className="flex items-center space-x-5">
-                              <div className="w-14 h-14 rounded-2xl bg-red-50 dark:bg-red-900/30 flex items-center justify-center text-red-600 shadow-inner">
-                                 <Stethoscope size={28} />
-                              </div>
-                              <div className="min-w-0">
-                                 <h4 className="font-black text-xl text-zinc-900 dark:text-white tracking-tight uppercase truncate">Specialist Entity</h4>
-                                 <p className="text-sm font-bold text-red-600 dark:text-red-400 mt-0.5 uppercase tracking-tighter">Scheduled for 10:30 AM (UTC-5)</p>
-                              </div>
-                          </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                         <div className="flex items-center text-sm font-bold text-zinc-500"><MapPin size={16} className="mr-2 text-red-600" /> CENTRAL HUB METRO</div>
-                         <div className="flex items-center text-sm font-bold text-zinc-500 italic truncate"><AlertCircle size={16} className="mr-2 text-red-600" /> {apt.reason}</div>
-                      </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="p-8 md:w-72 flex md:flex-col justify-center gap-3 bg-zinc-50 dark:bg-zinc-800/10 border-t md:border-t-0 md:border-l border-zinc-100 dark:border-zinc-800">
-                      {apt.status === 'COMPLETED' ? (
-                        <Button variant="secondary" className="w-full text-[11px] font-black uppercase tracking-widest py-3 hover:bg-red-600 hover:text-white transition-all shadow-sm" onClick={() => (window.location.href = `/records`)}>
-                           <FileText size={16} className="mr-2.5" /> Access Dossier
-                        </Button>
-                      ) : apt.status !== 'CANCELLED' ? (
-                        <>
-                          <Button variant="outline" className="w-full text-red-600 border-red-200 dark:border-red-900/30 font-black text-[11px] uppercase tracking-widest py-3" onClick={() => handleCancel(apt.appointmentId)}>
-                             Terminate Session
-                          </Button>
-                        </>
-                      ) : (
-                        <p className="text-center text-[10px] font-black text-zinc-400 uppercase tracking-widest leading-loose">Session Terminated by Proxy</p>
-                      )}
-                  </div>
-               </div>
+                <div className="flex items-center gap-3">
+                  <Button variant="outline" size="sm" className="rounded-xl px-6 font-bold text-xs">Details</Button>
+                </div>
+              </div>
             </Card>
           ))}
         </div>

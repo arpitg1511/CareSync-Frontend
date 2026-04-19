@@ -184,10 +184,10 @@ export const DoctorSchedule = () => {
                     <div className="flex items-center justify-between">
                         <div>
                             <h1 className="text-5xl font-black tracking-tighter text-zinc-900 dark:text-white uppercase italic">
-                                Vector <span className="text-red-600">Distribution</span>
+                                Manage <span className="text-red-600">Schedule</span>
                             </h1>
                             <p className="text-xs font-bold text-zinc-400 uppercase tracking-[0.4em] mt-3 flex items-center">
-                                <Activity className="mr-2 text-red-500" size={14} /> Schedule Command Interface Layer 02
+                                <Activity className="mr-2 text-red-500" size={14} /> Manage your availability and shifts
                             </p>
                         </div>
                         <div className="flex items-center space-x-3 bg-white dark:bg-zinc-900 p-2 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-sm">
@@ -245,7 +245,7 @@ export const DoctorSchedule = () => {
                         <div className="absolute -inset-1 bg-gradient-to-r from-red-600 to-zinc-900 rounded-[2.5rem] blur opacity-25 group-hover:opacity-40 transition duration-1000"></div>
                         <Card className="relative bg-white dark:bg-zinc-950 border-zinc-100 dark:border-zinc-800 p-8 rounded-[2.5rem] shadow-2xl space-y-8">
                             <div className="flex items-center justify-between">
-                                <h2 className="text-2xl font-black uppercase italic tracking-tighter">Vector Generator</h2>
+                                <h2 className="text-2xl font-black uppercase italic tracking-tighter">Slot Generator</h2>
                                 <div className="p-3 bg-red-50 dark:bg-red-950/20 rounded-2xl">
                                     <Zap className="text-red-600 fill-red-600" size={20} />
                                 </div>
@@ -305,8 +305,8 @@ export const DoctorSchedule = () => {
 
                     <div className="space-y-4">
                         <div className="flex items-center justify-between px-2">
-                            <h3 className="text-sm font-black uppercase tracking-widest text-zinc-500 italic">Day Vectors: {selectedDate}</h3>
-                            <span className="text-[10px] font-bold px-3 py-1 bg-zinc-100 dark:bg-zinc-900 rounded-full text-zinc-400">{slots.length} Units</span>
+                            <h3 className="text-sm font-black uppercase tracking-widest text-zinc-500 italic">Day Slots: {selectedDate}</h3>
+                            <span className="text-[10px] font-bold px-3 py-1 bg-zinc-100 dark:bg-zinc-900 rounded-full text-zinc-400">{slots.length} Slots</span>
                         </div>
 
                         <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
