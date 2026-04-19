@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+/* Official Tailwind 4 way to enable .dark class selector */
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", "system-ui", "sans-serif";
+  
+  --color-primary-50: #fef2f2;
+  --color-primary-100: #fee2e2;
+  --color-primary-200: #fecaca;
+  --color-primary-300: #fca5a5;
+  --color-primary-400: #f87171;
+  --color-primary-500: #ef4444;
+  --color-primary-600: #dc2626;
+  --color-primary-700: #b91c1c;
+  --color-primary-800: #991b1b;
+  --color-primary-900: #7f1d1d;
+
+  --color-border: #e2e8f0;
+}
+
+@layer base {
+  :root {
+    --background: #ffffff;
+    --foreground: #09090b;
+    --border: #e2e8f0;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: #09090b;
+    --foreground: #f8fafc;
+    --border: #27272a;
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  
+  html, body {
+     /* Prevent horizontal scroll */
+     max-width: 100%;
+     overflow-x: hidden;
+     position: relative;
+  }
+
+  html {
+     background-color: var(--background);
+     transition: background-color 0.3s ease;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    @apply font-sans antialiased transition-colors duration-300;
+  }
+}
+
+.glass-card {
+  background-color: color-mix(in srgb, var(--background), transparent 30%);
+  backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--foreground), transparent 90%);
+  @apply shadow-xl rounded-xl overflow-hidden;
+}
+
+.btn-primary {
+  @apply px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95;
+}
+
+.input-field {
+  @apply w-full px-4 py-2 rounded-lg border border-zinc-200 bg-white focus:ring-2 focus:ring-primary-500 outline-none transition-all;
+  @apply dark:border-zinc-800 dark:bg-zinc-900;
+}
