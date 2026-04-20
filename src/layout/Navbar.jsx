@@ -12,7 +12,8 @@ import {
   Settings,
   Clock,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Shield
 } from 'lucide-react';
 import useAuthStore from '../store/useAuthStore';
 import useUIStore from '../store/useUIStore';
@@ -29,9 +30,11 @@ export const Navbar = () => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [recipientId, setRecipientId] = useState(null);
+  const [dismissedRecentIds, setDismissedRecentIds] = useState([]);
   const navigate = useNavigate();
 
-  const isDoctor = user?.role === 'DOCTOR' || user?.role === 'ROLE_DOCTOR';
+  const isDoctor = user?.role?.toUpperCase().includes('DOCTOR');
+  const isAdmin = user?.role?.toUpperCase().includes('ADMIN');
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -50,12 +53,11 @@ export const Navbar = () => {
   const resolveRecipientId = async () => {
     try {
       if (isDoctor) {
-        const { data } = await providerService.getAll();
-        const profile = data.find(p => p.email === user.email);
+        const { data: profile } = await providerService.getByEmail(user.email);
         if (profile) setRecipientId(profile.providerId);
       } else {
-        const { data } = await patientService.getByEmail(user.email);
-        if (data) setRecipientId(data.patientId);
+        const { data: profile } = await patientService.getByEmail(user.email);
+        if (profile) setRecipientId(profile.patientId);
       }
     } catch (err) {
       console.warn("Identity Resolution Failure", err);
@@ -72,6 +74,19 @@ export const Navbar = () => {
       setUnreadCount(count.count || 0);
     } catch (err) {
       console.error("Sync Error", err);
+    }
+  };
+
+  const handleToggleNotif = async () => {
+    const newState = !isNotifOpen;
+    setIsNotifOpen(newState);
+    if (newState && recipientId && unreadCount > 0) {
+      try {
+        await notificationService.markAllRead(recipientId);
+        setUnreadCount(0);
+      } catch (err) {
+        console.warn("Read Status Sync Failure (Silent Fallback)");
+      }
     }
   };
 
@@ -100,7 +115,6 @@ export const Navbar = () => {
             {isAuthenticated && (
               <>
                 <NavLink to="/appointments" className={({isActive}) => `text-sm font-bold transition-colors ${isActive ? 'text-red-600' : 'text-zinc-500 dark:text-zinc-400 hover:text-red-600'}`}>Appointments</NavLink>
-                <NavLink to="/records" className={({isActive}) => `text-sm font-bold transition-colors ${isActive ? 'text-red-600' : 'text-zinc-500 dark:text-zinc-400 hover:text-red-600'}`}>Medical Records</NavLink>
                 {isDoctor && (
                   <NavLink to="/doctor/schedule" className={({isActive}) => `text-sm font-bold transition-colors ${isActive ? 'text-red-600' : 'text-zinc-500 dark:text-zinc-400 hover:text-red-600'}`}>Manage Schedule</NavLink>
                 )}
@@ -120,7 +134,7 @@ export const Navbar = () => {
               <div className="flex items-center space-x-4">
                 <div className="relative">
                   <button 
-                    onClick={() => setIsNotifOpen(!isNotifOpen)}
+                    onClick={handleToggleNotif}
                     className={`p-2 relative rounded-xl transition-all ${unreadCount > 0 ? 'text-red-600' : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
                   >
                     <Bell size={20} className={unreadCount > 0 ? 'animate-bounce' : ''} />
@@ -140,15 +154,26 @@ export const Navbar = () => {
                              <p className="text-xs font-bold text-zinc-400">No notifications</p>
                           </div>
                         ) : (
-                          notifications.map(n => (
-                            <div key={n.notificationId} className="p-4 flex gap-3 border-b border-zinc-50 dark:border-zinc-800/50 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
+                          notifications
+                            .filter(n => !dismissedRecentIds.includes(n.notificationId))
+                            .map(n => (
+                            <div key={n.notificationId} className="p-4 flex gap-3 border-b border-zinc-50 dark:border-zinc-800/50 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors group relative">
                                <div className="shrink-0 mt-0.5">
                                   {n.title.toLowerCase().includes('booking') ? <Calendar size={16} className="text-blue-500" /> : <AlertCircle size={16} className="text-red-500" />}
                                </div>
-                               <div className="min-w-0">
+                               <div className="min-w-0 pr-6">
                                   <p className="text-xs font-black text-zinc-900 dark:text-white truncate">{n.title}</p>
                                   <p className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 line-clamp-2">{n.message}</p>
                                </div>
+                               <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDismissedRecentIds(prev => [...prev, n.notificationId]);
+                                  }}
+                                  className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                >
+                                   <X size={12} />
+                                </button>
                             </div>
                           ))
                         )}
@@ -182,6 +207,16 @@ export const Navbar = () => {
                     <NavLink to="/profile" className="flex items-center px-4 py-2.5 text-sm font-bold text-zinc-600 dark:text-zinc-400 hover:bg-red-50 dark:hover:bg-red-900/10 hover:text-red-600 transition-colors">
                       <Settings className="w-4 h-4 mr-3" /> Profile Settings
                     </NavLink>
+                    {isDoctor && (
+                      <NavLink to="/doctor/schedule" className="flex items-center px-4 py-2.5 text-sm font-bold text-zinc-600 dark:text-zinc-400 hover:bg-red-50 dark:hover:bg-red-900/10 hover:text-red-600 transition-colors">
+                        <HeartPulse className="w-4 h-4 mr-3" /> Shift Management
+                      </NavLink>
+                    )}
+                    {isAdmin && (
+                      <NavLink to="/admin" className="flex items-center px-4 py-2.5 text-sm font-bold text-zinc-600 dark:text-zinc-400 hover:bg-red-50 dark:hover:bg-red-900/10 hover:text-red-600 transition-colors">
+                        <Shield className="w-4 h-4 mr-3" /> Manage Requests
+                      </NavLink>
+                    )}
                     <button 
                       onClick={handleLogout}
                       className="w-full flex items-center px-4 py-2.5 text-sm font-bold text-rose-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors"

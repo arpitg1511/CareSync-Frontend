@@ -56,7 +56,8 @@ export const Profile = () => {
     dateOfBirth: '',
     medicalHistory: '',
     emergencyContact: '',
-    patientId: null
+    patientId: null,
+    status: 'PENDING'
   });
 
   useEffect(() => {
@@ -70,8 +71,8 @@ export const Profile = () => {
 
   const fetchMedicalProfile = async () => {
     try {
-      const res = await providerService.getAll();
-      const myProfile = res.data.find(p => p.email === user.email);
+      const res = await providerService.getByEmail(user.email);
+      const myProfile = res.data;
       if (myProfile) {
         setFormData(prev => ({
           ...prev,
@@ -83,11 +84,12 @@ export const Profile = () => {
           clinicAddress: myProfile.clinicAddress || '',
           experienceYears: myProfile.experienceYears || 0,
           qualification: myProfile.qualification || '',
-          contact: myProfile.contact || ''
+          contact: myProfile.contact || '',
+          status: myProfile.status || 'PENDING'
         }));
       }
     } catch (err) {
-      console.error("Error fetching medical profile:", err);
+      console.warn("Medical Identity Fetch Failed (PENDING/REJECTED state logic)");
     }
   };
 
@@ -105,6 +107,37 @@ export const Profile = () => {
       }));
     } catch (err) {
       console.log("No patient dossier found yet.");
+    }
+  };
+
+  const handleReapply = async () => {
+    try {
+      setLoading(true);
+      const reapplyData = {
+        ...formData,
+        status: 'PENDING'
+      };
+      await providerService.saveProfile(reapplyData);
+      
+      // Dispatch Alert to Administrative Cluster (Recipient 1)
+      try {
+        await notificationService.send({
+          recipientId: 1,
+          title: 'Clinical Authorization Requested',
+          message: `Specialist ${formData.fullName} has re-submitted their dossier for administrative review.`,
+          type: 'ADMIN'
+        });
+      } catch (nErr) {
+        console.warn("Notification Relay Failure (Admin is still updated in background)");
+      }
+
+      setFormData(prev => ({ ...prev, status: 'PENDING' }));
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      console.error("Re-application Synchrony Failure", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -189,10 +222,10 @@ export const Profile = () => {
     <div className="max-w-5xl mx-auto px-4 py-12 space-y-12 animate-in fade-in duration-700">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8 border-b border-zinc-200 dark:border-zinc-800">
         <div className="space-y-2">
-          <h1 className="text-5xl font-black text-zinc-900 dark:text-white tracking-tighter">
+          <h1 className="text-5xl font-extrabold text-zinc-900 dark:text-white tracking-tighter">
             {isDoctor ? 'Professional Dossier' : 'Account Identity'}
           </h1>
-          <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs flex items-center">
+          <p className="text-zinc-500 font-semibold tracking-wide text-xs flex items-center">
             <Shield className="mr-2 text-red-600" size={14} /> Security Clearance: {user?.role?.replace('ROLE_', '')}
           </p>
         </div>
@@ -202,6 +235,72 @@ export const Profile = () => {
           </div>
         )}
       </div>
+
+      {/* Premium Verification Status Monitor */}
+      {isDoctor && (
+        <div className="w-full animate-in slide-in-from-top-6 duration-1000">
+           {formData.status === 'PENDING' && (
+             <div className="bg-amber-50/50 dark:bg-amber-500/5 border border-amber-200/50 dark:border-amber-500/20 rounded-[2.5rem] p-8 flex items-center gap-8 relative overflow-hidden backdrop-blur-md">
+                <div className="absolute top-0 right-0 p-8 opacity-5 text-amber-600 rotate-12">
+                   <Clock size={120} />
+                </div>
+                <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 shadow-inner animate-pulse shrink-0">
+                   <Clock size={32} />
+                </div>
+                <div className="flex-grow space-y-1 relative z-10">
+                   <h3 className="text-xl font-bold text-amber-900 dark:text-amber-500 tracking-tight">Credential Sync in Progress</h3>
+                   <p className="text-sm font-medium text-amber-700/70 dark:text-amber-500/60 leading-relaxed max-w-2xl">
+                      Administration is verifying your medical dossiers. Access to the clinical directory will be enabled upon successful synchronization.
+                   </p>
+                </div>
+                <div className="hidden md:block px-6 py-2 bg-amber-600 text-white rounded-full text-[10px] font-bold uppercase tracking-widest shadow-lg shadow-amber-500/20 whitespace-nowrap">
+                   Waiting for Approval
+                </div>
+             </div>
+           )}
+           {formData.status === 'APPROVED' && (
+             <div className="bg-emerald-600/10 dark:bg-emerald-500/5 border border-emerald-500/30 rounded-[2.5rem] p-8 flex items-center gap-8 relative overflow-hidden backdrop-blur-md">
+                <div className="absolute top-0 right-0 p-8 opacity-5 text-emerald-600 rotate-12">
+                   <CheckCircle2 size={120} />
+                </div>
+                <div className="w-16 h-16 rounded-2xl bg-emerald-600 flex items-center justify-center text-white shadow-xl shadow-emerald-500/40 shrink-0">
+                   <CheckCircle2 size={32} />
+                </div>
+                <div className="flex-grow space-y-1 relative z-10">
+                   <h3 className="text-xl font-bold text-emerald-900 dark:text-emerald-400 tracking-tight">Clinical Activation Active</h3>
+                   <p className="text-sm font-medium text-emerald-700/70 dark:text-emerald-500/60 leading-relaxed max-w-2xl">
+                      Dossier successfully verified. Your clinical profile is now live in the global specialist matrix and ready for patient binding.
+                   </p>
+                </div>
+                <div className="hidden md:block px-6 py-2 bg-emerald-600 text-white rounded-full text-[10px] font-bold uppercase tracking-widest shadow-lg shadow-emerald-500/20 whitespace-nowrap">
+                   Verified Specialist
+                </div>
+             </div>
+           )}
+           {formData.status === 'REJECTED' && (
+             <div className="bg-red-50/50 dark:bg-red-500/5 border border-red-200/50 dark:border-red-500/20 rounded-[2.5rem] p-8 flex items-center gap-8 relative overflow-hidden backdrop-blur-md">
+                <div className="absolute top-0 right-0 p-8 opacity-5 text-red-600 rotate-12">
+                   <Shield size={120} />
+                </div>
+                <div className="w-16 h-16 rounded-2xl bg-red-600 flex items-center justify-center text-white shadow-xl shadow-red-500/40 shrink-0">
+                   <Shield size={32} />
+                </div>
+                <div className="flex-grow space-y-1 relative z-10 text-red-900 dark:text-red-400">
+                   <h3 className="text-xl font-bold tracking-tight">Clinical Application Terminated</h3>
+                   <p className="text-sm font-medium text-red-700/70 dark:text-red-500/60 leading-relaxed max-w-2xl">
+                      Administrative review encountered discrepancies in your dossier. Please audit your clinical details and re-initialize the synchronization request.
+                   </p>
+                </div>
+                <button 
+                  onClick={handleReapply}
+                  className="hidden md:block px-6 py-2 bg-red-600 text-white rounded-full text-[10px] font-bold uppercase tracking-widest shadow-lg shadow-red-500/20 hover:scale-105 transition-transform whitespace-nowrap"
+                >
+                   Apply for Approval
+                </button>
+             </div>
+           )}
+        </div>
+      )}
 
       <form onSubmit={handleSave} className="space-y-10">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">

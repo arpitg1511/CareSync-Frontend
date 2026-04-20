@@ -39,7 +39,7 @@ export const Home = () => {
           </h1>
           
           <p className="text-lg md:text-xl text-zinc-500 dark:text-zinc-400 max-w-2xl mx-auto leading-relaxed font-medium">
-            A high-performance microservices platform connecting patients with elite specialists through real-time availability and encrypted medical history.
+            A high-performance microservices platform connecting patients with elite specialists through real-time availability and verified clinical profiles.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-8">
@@ -67,7 +67,7 @@ export const Home = () => {
           {[
               { label: 'Cloud Specialists', value: '250+' },
               { label: 'Patient Success', value: '99.9%' },
-              { label: 'Encrypted Records', value: '1.2M' },
+              { label: 'Verified Experts', value: '1.2M+' },
               { label: 'Latency', value: '< 20ms' }
           ].map((stat, i) => (
             <div key={i} className="text-center space-y-2">
@@ -99,7 +99,7 @@ export const Home = () => {
               <ShieldCheck className="w-7 h-7" />
             </div>
             <h3 className="text-2xl font-black tracking-tight mb-4">Stateless Security</h3>
-            <p className="text-zinc-500 dark:text-zinc-400 leading-relaxed font-bold text-sm">Industry-standard JWT authentication and encrypted data sharding keep your medical history completely isolated.</p>
+            <p className="text-zinc-500 dark:text-zinc-400 leading-relaxed font-bold text-sm">Industry-standard JWT authentication and encrypted data sharding keep your clinical identity completely isolated.</p>
           </Card>
 
           <Card className="p-8 hover:border-amber-500/50 group bg-zinc-50/50 dark:bg-zinc-900/50 border-transparent shadow-none hover:shadow-2xl hover:shadow-amber-500/5">
@@ -121,7 +121,7 @@ export const Home = () => {
           
           <div className="relative z-10 max-w-3xl mx-auto space-y-8">
             <h2 className="text-4xl md:text-6xl font-black tracking-tighter leading-none">The future of healthcare is distributed.</h2>
-            <p className="text-red-100 text-lg md:text-xl font-medium max-w-2xl mx-auto">Access world-class specialists and secure medical storage through our modern digital gateway.</p>
+            <p className="text-red-100 text-lg md:text-xl font-medium max-w-2xl mx-auto">Access world-class specialists and secure clinical synchronization through our modern digital gateway.</p>
             <div className="pt-4">
               <Button size="lg" className="px-12 py-6 rounded-2xl bg-white text-red-600 hover:bg-zinc-100 shadow-2xl">
                  Launch Platform <ArrowRight className="ml-3 w-6 h-6" />

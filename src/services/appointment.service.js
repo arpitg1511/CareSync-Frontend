@@ -7,6 +7,14 @@ export const appointmentService = {
   getById: (id) => api.get(`${APPOINTMENT_URL}/${id}`),
   cancel: (id) => api.put(`${APPOINTMENT_URL}/${id}/cancel`),
   complete: (id) => api.put(`${APPOINTMENT_URL}/${id}/complete`),
+  markNoShow: (id) => api.put(`${APPOINTMENT_URL}/${id}/no-show`),
   getSlots: (providerId, date) => api.get(`/slots/available?providerId=${providerId}&date=${date}`),
   getMyList: () => api.get(`${APPOINTMENT_URL}/my`),
+  
+  // Doctor/Provider Endpoints
+  getByProvider: (providerId) => api.get(`${APPOINTMENT_URL}/provider/${providerId}`),
+  getCount: (providerId) => api.get(`${APPOINTMENT_URL}/provider/${providerId}/count`),
+  
+  // Patient Endpoints
+  getByUser: (userId) => api.get(`${APPOINTMENT_URL}/patient/${userId}`),
 };

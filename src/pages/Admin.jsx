@@ -15,6 +15,7 @@ import {
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { providerService } from '../services/provider.service';
+import { notificationService } from '../services/notification.service';
 
 export const Admin = () => {
   const [pending, setPending] = useState([]);
@@ -48,6 +49,17 @@ export const Admin = () => {
     setActioning(id);
     try {
       await providerService.approve(id);
+      
+      // Notify Specialist of Activation
+      try {
+        await notificationService.send({
+          recipientId: id,
+          title: 'Clinical Activation Complete',
+          message: 'Your dossier has been verified. You are now live in the global specialist directory.',
+          type: 'SYSTEM'
+        });
+      } catch (nErr) { console.warn("Doc Notification Failed", nErr); }
+
       setPending(pending.filter(p => p.providerId !== id));
     } catch (err) {
       alert('Approval failed.');
@@ -61,6 +73,17 @@ export const Admin = () => {
     setActioning(id);
     try {
       await providerService.reject(id);
+      
+      // Notify Specialist of Discrepancy
+      try {
+        await notificationService.send({
+          recipientId: id,
+          title: 'Credential Discrepancy Alert',
+          message: 'Administrative review found inconsistencies in your dossier. Please audit your clinical details.',
+          type: 'ALERT'
+        });
+      } catch (nErr) { console.warn("Doc Notification Failed", nErr); }
+
       setPending(pending.filter(p => p.providerId !== id));
     } catch (err) {
       alert('Rejection failed.');
@@ -70,13 +93,24 @@ export const Admin = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('🛡️ SECURITY ALERT: Are you sure you want to PERMANENTLY revoke these credentials? This action cannot be undone.')) return;
+    if (!window.confirm('🛡️ SECURITY ALERT: Are you sure you want to PERMANENTLY revoke these credentials? This will immediately disable clinical access.')) return;
     setActioning(id);
     try {
-      await providerService.deleteProfile(id);
+      await providerService.reject(id);
+      
+      // Dispatch Revocation Alert
+      try {
+        await notificationService.send({
+          recipientId: id,
+          title: 'Clinical Credentials Revoked',
+          message: 'The administrative board has revoked your clinical authorization. Your profile is no longer active in the directory.',
+          type: 'ALERT'
+        });
+      } catch (nErr) { console.warn("Revocation Alert Failed", nErr); }
+
       setActive(active.filter(p => p.providerId !== id));
     } catch (err) {
-      alert('Deletion failed. System firewall may be active.');
+      alert('Revocation failed. Network discrepancy detected.');
     } finally {
       setActioning(null);
     }

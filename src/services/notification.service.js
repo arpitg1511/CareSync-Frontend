@@ -8,4 +8,5 @@ export const notificationService = {
   markRead: (id) => api.put(`${NOTIF_URL}/${id}/read`),
   markAllRead: (recipientId) => api.put(`${NOTIF_URL}/recipient/${recipientId}/read-all`),
   delete: (id) => api.delete(`${NOTIF_URL}/${id}`),
+  send: (data) => api.post(NOTIF_URL, data),
 };

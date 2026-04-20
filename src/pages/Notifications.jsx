@@ -8,7 +8,8 @@ import {
   AlertCircle,
   Calendar,
   CreditCard,
-  MessageSquare
+  MessageSquare,
+  X
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -24,7 +25,7 @@ export const Notifications = () => {
   const [recipientId, setRecipientId] = useState(null);
   const [filter, setFilter] = useState('ALL'); 
 
-  const isDoctor = user?.role === 'DOCTOR' || user?.role === 'ROLE_DOCTOR';
+  const isDoctor = user?.role?.toUpperCase().includes('DOCTOR');
 
   useEffect(() => {
     if (isAuthenticated) resolveRecipientId();
@@ -37,15 +38,14 @@ export const Notifications = () => {
   const resolveRecipientId = async () => {
     try {
       if (isDoctor) {
-        const { data } = await providerService.getAll();
-        const profile = data.find(p => p.email === user.email);
+        const { data: profile } = await providerService.getByEmail(user.email);
         if (profile) setRecipientId(profile.providerId);
       } else {
-        const { data } = await patientService.getByEmail(user.email);
-        if (data) setRecipientId(data.patientId);
+        const { data: profile } = await patientService.getByEmail(user.email);
+        if (profile) setRecipientId(profile.patientId);
       }
     } catch (err) {
-      console.error(err);
+      console.warn("Identity Resolution Failure on Ledger", err);
       setLoading(false);
     }
   };
@@ -138,18 +138,23 @@ export const Notifications = () => {
               <div className="flex items-start gap-4">
                 <div className="flex-grow min-w-0">
                   <div className="flex justify-between items-start">
-                    <div>
+                    <div className="min-w-0 pr-8">
                         <h3 className="text-sm font-black uppercase text-zinc-900 dark:text-white">{n.title}</h3>
                         <p className="text-xs font-bold text-zinc-600 dark:text-zinc-400 leading-relaxed mt-1">{n.message}</p>
                     </div>
+                    <button 
+                      onClick={() => handleDelete(n.notificationId)}
+                      className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl text-zinc-400 hover:text-red-600 transition-all shadow-sm border border-zinc-100 dark:border-zinc-800"
+                    >
+                       <X size={16} />
+                    </button>
                   </div>
-                  <div className="flex items-center gap-4 mt-3">
+                  <div className="flex items-center gap-4 mt-3 pt-3 border-t border-zinc-50 dark:border-zinc-800/50">
                     <span className="text-[10px] font-bold text-zinc-400 uppercase"><Clock size={12} className="inline mr-1" /> {new Date(n.createdAt).toLocaleString()}</span>
                     <div className="flex gap-3">
                        {!n.read && (
                          <button onClick={() => handleMarkRead(n.notificationId)} className="text-[10px] font-black text-emerald-600 uppercase hover:underline">Mark Read</button>
                        )}
-                       <button onClick={() => handleDelete(n.notificationId)} className="text-[10px] font-black text-red-600 uppercase hover:underline">Delete</button>
                     </div>
                   </div>
                 </div>

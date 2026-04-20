@@ -16,4 +16,5 @@ export const providerService = {
   deleteProfile: (id) => api.delete(`${PROVIDER_URL}/admin/${id}`),
   setAvailability: (id, available) => api.put(`${PROVIDER_URL}/${id}/availability?available=${available}`),
   getBySpeciality: (spec) => api.get(`${PROVIDER_URL}/speciality/${spec}`),
+  getByEmail: (email) => api.get(`${PROVIDER_URL}/email/${email}`),
 };

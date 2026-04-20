@@ -10,17 +10,22 @@ import {
   Clock,
   ChevronLeft,
   ArrowRight,
-  Loader2
+  Loader2,
+  MessageSquare
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { providerService } from '../services/provider.service';
+import { reviewService } from '../services/review.service';
+import { patientService } from '../services/patient.service';
 import { appointmentService } from '../services/appointment.service';
 import useAuthStore from '../store/useAuthStore';
 
 export const DoctorProfile = () => {
   const { id } = useParams();
   const [doctor, setDoctor] = useState(null);
+  const [reviews, setReviews] = useState([]);
+  const [stats, setStats] = useState({ averageRating: 0 });
   const [slots, setSlots] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(true);
@@ -38,8 +43,34 @@ export const DoctorProfile = () => {
 
   const fetchDoctor = async () => {
     try {
-      const res = await providerService.getById(id);
-      setDoctor(res.data);
+      const docRes = await providerService.getById(id);
+      setDoctor(docRes.data);
+      
+      try {
+        const [reviewRes, ratingVal] = await Promise.all([
+          reviewService.getByProvider(id),
+          reviewService.getAvgRating(id)
+        ]);
+        
+        // Enrich reviews with patient names
+        const enrichedReviews = await Promise.all(reviewRes.data.map(async (rev) => {
+           if (rev.isAnonymous) return { ...rev, patientName: 'Anonymous Patient' };
+           try {
+             const pRes = await patientService.getById(rev.patientId);
+             return { ...rev, patientName: pRes.data.fullName || 'Verified Patient' };
+           } catch (e) { return { ...rev, patientName: 'Verified Patient' }; }
+        }));
+
+        setReviews(enrichedReviews);
+        if (ratingVal.data) {
+          setStats({ 
+            averageRating: ratingVal.data.avgRating || 0,
+            totalReviews: ratingVal.data.totalReviews || 0
+          });
+        }
+      } catch (e) {
+        console.warn("Feedback Matrix Offline");
+      }
     } catch (err) {
       console.error(err);
     }
@@ -58,7 +89,7 @@ export const DoctorProfile = () => {
 
   const handleBook = async (slot) => {
     if (!isAuthenticated) return navigate('/login');
-    if (user?.role !== 'PATIENT' && user?.role !== 'ROLE_PATIENT') {
+    if (!user?.role?.toUpperCase().includes('PATIENT')) {
       alert("Authorization Discordance: Only Medical Entities with 'PATIENT' status can bind to these vectors.");
       return;
     }
@@ -106,21 +137,21 @@ export const DoctorProfile = () => {
                       Identity Verified
                     </span>
                     <span className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter border border-red-100 dark:border-red-800">
-                      Top Specialist
+                      {(stats.averageRating > 0 || doctor?.avgRating > 0) ? "Top Specialist" : "Provisional Specialist"}
                     </span>
                   </div>
-                  <h1 className="text-4xl md:text-6xl font-black text-zinc-900 dark:text-white tracking-tighter leading-none truncate">
+                  <h1 className="text-4xl md:text-6xl font-black text-zinc-900 dark:text-white tracking-tighter leading-none truncate uppercase italic">
                     {doctor?.fullName}
                   </h1>
-                  <p className="text-xl font-bold text-red-600 dark:text-red-400 uppercase tracking-normal">
+                  <p className="text-xl font-bold text-red-600 dark:text-red-400 uppercase tracking-normal underline decoration-2 underline-offset-8">
                     {doctor?.specialization}
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-zinc-600 dark:text-zinc-400 text-sm font-bold">
-                  <div className="flex items-center"><MapPin size={20} className="mr-3 text-red-600" /> {doctor?.clinicName || 'UNKNOWN LOCATION'}</div>
+                  <div className="flex items-center"><MapPin size={20} className="mr-3 text-red-600" /> {doctor?.clinicName || 'Operational HQ'}</div>
                   <div className="flex items-center"><Award size={20} className="mr-3 text-red-600" /> {doctor?.experienceYears || '0'} YEARS CLINICAL EXP</div>
-                  <div className="flex items-center"><Clock size={20} className="mr-3 text-red-600" /> OPERATIONAL STATUS: {doctor?.isAvailable ? 'ACTIVE' : 'INACTIVE'}</div>
+                  <div className="flex items-center"><Clock size={20} className="mr-3 text-red-600" /> STATUS: {doctor?.isAvailable ? 'ACTIVE' : 'INACTIVE'}</div>
                   <div className="flex items-center text-emerald-600 font-black tracking-tight"><ShieldCheck size={20} className="mr-3" /> FULL RECORD ENCRYPTION</div>
                 </div>
               </div>
@@ -128,29 +159,85 @@ export const DoctorProfile = () => {
 
             <div className="grid grid-cols-3 gap-4 mt-12 w-full">
                <div className="p-4 bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl flex flex-col items-center border border-zinc-100 dark:border-zinc-800">
-                  <span className="text-2xl font-black text-zinc-900 dark:text-white">{doctor?.avgRating || '0.0'}</span>
-                  <div className="flex text-zinc-300 mb-1"><Star size={10} className="fill-current"/><Star size={10} className="fill-current"/><Star size={10} className="fill-current"/><Star size={10} className="fill-current"/><Star size={10} className="fill-current"/></div>
-                  <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest text-center">Entity Rating</span>
+                  <span className="text-2xl font-black text-zinc-900 dark:text-white">{stats.averageRating > 0 ? stats.averageRating.toFixed(1) : (doctor?.avgRating?.toFixed(1) || '0.0')}</span>
+                  <div className="flex text-amber-500 mb-1">
+                    {[1,2,3,4,5].map(i => (
+                      <Star key={i} size={10} className={i <= (stats.averageRating || doctor?.avgRating) ? "fill-current" : "text-zinc-300"} />
+                    ))}
+                  </div>
+                  <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest text-center">Avg Rating</span>
                </div>
                <div className="p-4 bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl flex flex-col items-center border border-zinc-100 dark:border-zinc-800">
-                  <span className="text-2xl font-black text-zinc-900 dark:text-white">0</span>
+                  <span className="text-2xl font-black text-zinc-900 dark:text-white">{doctor?.experienceYears || '0'}</span>
                   <div className="h-2.5"></div>
-                  <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest text-center">Total Sessions</span>
+                  <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest text-center">Exp Years</span>
                </div>
                <div className="p-4 bg-zinc-50 dark:bg-zinc-800/40 rounded-2xl flex flex-col items-center border border-zinc-100 dark:border-zinc-800">
-                  <span className="text-2xl font-black text-zinc-900 dark:text-white">0</span>
+                  <span className="text-2xl font-black text-zinc-900 dark:text-white">{reviews.length}</span>
                   <div className="h-2.5"></div>
-                  <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest text-center">Reviews</span>
+                  <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest text-center">Verified Reviews</span>
                </div>
             </div>
           </section>
 
-          {/* Bio section */}
-          <section className="space-y-6 px-4 w-full">
-             <h2 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tight">Professional Dossier</h2>
-             <p className="text-zinc-600 dark:text-zinc-400 leading-loose text-xl font-medium border-l-8 border-red-600 pl-8 italic">
+          <section className="bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-800 rounded-[2.5rem] p-10">
+             <h3 className="text-sm font-black text-zinc-400 uppercase tracking-widest mb-6">Expertise Vector</h3>
+             <p className="text-zinc-600 dark:text-zinc-300 leading-loose text-lg font-medium italic border-l-4 border-red-600 pl-8">
                 "{doctor?.bio || "No biography has been defined for this medical proxy."}"
              </p>
+          </section>
+
+          {/* Feedback Matrix */}
+          <section className="space-y-8">
+             <div className="flex items-center justify-between px-2">
+                <div>
+                   <h3 className="text-lg font-black text-zinc-900 dark:text-white uppercase tracking-tight italic">Feedback Matrix</h3>
+                   <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest pl-1 mt-1">Synchronized Patient Signals</p>
+                </div>
+                <div className="flex items-center gap-2">
+                   <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                   <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{reviews.length} Verified Records</span>
+                </div>
+             </div>
+
+             <div className="grid gap-6">
+                {reviews.length === 0 ? (
+                  <div className="p-16 text-center bg-zinc-50 dark:bg-zinc-900/40 rounded-[2.5rem] border border-dashed border-zinc-200 dark:border-zinc-800">
+                     <MessageSquare size={40} className="mx-auto text-zinc-200 mb-4" />
+                     <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">No signals detected in this sector</p>
+                  </div>
+                ) : (
+                  reviews.map(review => (
+                    <Card key={review.reviewId} className="p-10 rounded-[2.5rem] border-zinc-100 dark:border-zinc-800 hover:shadow-2xl transition-all duration-500 group bg-white dark:bg-zinc-900 overflow-hidden relative">
+                       <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform">
+                          <MessageSquare size={60} />
+                       </div>
+                       <div className="flex justify-between items-start mb-6 relative z-10">
+                          <div className="flex items-center gap-1">
+                             {[1,2,3,4,5].map(s => (
+                               <Star key={s} size={14} className={`${s <= review.rating ? 'fill-amber-500 text-amber-500' : 'text-zinc-200'}`} />
+                             ))}
+                          </div>
+                          <div className="flex items-center text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                             <Clock size={12} className="mr-2 text-red-600" /> {new Date(review.reviewDate || review.createdAt).toLocaleDateString()}
+                          </div>
+                       </div>
+                       <p className="text-zinc-900 dark:text-zinc-200 text-lg font-medium leading-relaxed relative z-10 italic mb-8">
+                          "{review.comment}"
+                       </p>
+                       <div className="flex items-center space-x-4 border-t border-zinc-100 dark:border-zinc-800 pt-8 mt-2 relative z-10">
+                          <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-[12px] font-black text-red-600">
+                             {review.patientName?.charAt(0) || 'P'}
+                          </div>
+                          <div className="flex flex-col">
+                             <span className="text-[11px] font-black uppercase tracking-widest text-zinc-900 dark:text-white">{review.patientName}</span>
+                             <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-[0.2em]">Verified Contributor</span>
+                          </div>
+                       </div>
+                    </Card>
+                  ))
+                )}
+             </div>
           </section>
         </div>
 

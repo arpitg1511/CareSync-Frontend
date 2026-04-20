@@ -11,6 +11,7 @@ import { MedicalRecords } from './pages/MedicalRecords';
 import { Admin } from './pages/Admin';
 import { Profile } from './pages/Profile';
 import { DoctorSchedule } from './pages/DoctorSchedule';
+import { Notifications } from './pages/Notifications';
 import useAuthStore from './store/useAuthStore';
 import useUIStore from './store/useUIStore';
 
@@ -65,6 +66,12 @@ function App() {
             <Route path="/doctor/schedule" element={
               <PrivateRoute>
                 <DoctorSchedule />
+              </PrivateRoute>
+            } />
+
+            <Route path="/notifications" element={
+              <PrivateRoute>
+                <Notifications />
               </PrivateRoute>
             } />
             
