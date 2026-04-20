@@ -9,4 +9,7 @@ export const slotService = {
   delete: (id) => api.delete(`${SLOT_URL}/${id}`),
   block: (id) => api.put(`${SLOT_URL}/${id}/block`),
   unblock: (id) => api.put(`${SLOT_URL}/${id}/unblock`),
+  deleteByDate: (providerId, date) => api.delete(`${SLOT_URL}/provider/${providerId}/date/${date}`),
+  generateRecurring: (data) => api.post(`${SLOT_URL}/recurring`, data),
+  update: (id, data) => api.put(`${SLOT_URL}/${id}`, data),
 };

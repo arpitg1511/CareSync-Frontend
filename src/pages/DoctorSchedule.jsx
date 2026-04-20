@@ -15,8 +15,13 @@ import {
     ShieldAlert,
     CalendarDays,
     Activity,
-    Zap
+    Zap,
+    Pencil,
+    X,
+    RefreshCw
 } from 'lucide-react';
+import { slotService } from '../services/slot.service';
+import { appointmentService } from '../services/appointment.service';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
@@ -38,6 +43,13 @@ export const DoctorSchedule = () => {
     const [startTime, setStartTime] = useState('09:00');
     const [endTime, setEndTime] = useState('17:00');
     const [interval, setInterval] = useState(30);
+    const [isRecurring, setIsRecurring] = useState(false);
+    const [recurrenceWeeks, setRecurrenceWeeks] = useState(4);
+    const [daysOfWeek, setDaysOfWeek] = useState([1, 2, 3, 4, 5]);
+
+    // Rescheduling State
+    const [editingSlotId, setEditingSlotId] = useState(null);
+    const [editForm, setEditForm] = useState({ startTime: '', endTime: '' });
 
     useEffect(() => {
         fetchProviderId();
@@ -104,35 +116,82 @@ export const DoctorSchedule = () => {
     };
 
     const handleGenerate = async () => {
-        if (slots.length > 0) {
-            if (!window.confirm(`Warning: Overlapping vectors detected. Do you want to wipe existing ${slots.length} slots for ${selectedDate} first?`)) {
-                return;
-            }
-            // Backend now handles atomic purge during bulk POST
-        }
-
         setGenerating(true);
         try {
-            const newSlots = [];
-            let current = new Date(`${selectedDate}T${startTime}`);
-            const end = new Date(`${selectedDate}T${endTime}`);
-
-            while (current < end) {
-                const next = new Date(current.getTime() + interval * 60000);
-                newSlots.push({
+            if (isRecurring) {
+                await slotService.generateRecurring({
                     providerId,
-                    date: selectedDate,
-                    startTime: current.toTimeString().split(' ')[0],
-                    endTime: next.toTimeString().split(' ')[0],
-                    durationMinutes: interval
+                    startTime,
+                    endTime,
+                    durationMinutes: interval,
+                    recurrenceWeeks,
+                    daysOfWeek
                 });
-                current = next;
+                alert(`✅ Generated ${recurrenceWeeks} weeks of recurring vectors.`);
+            } else {
+                const targetDay = new Date(selectedDate).getDay();
+                await slotService.generateRecurring({
+                    providerId,
+                    startTime,
+                    endTime,
+                    durationMinutes: interval,
+                    recurrenceWeeks: 4, // Coverage window
+                    daysOfWeek: [targetDay]
+                });
+                alert("✅ Vector Day Synchronized.");
             }
-
-            await api.post('/slots/bulk', newSlots);
             fetchSlots();
         } catch (err) {
-            alert("Matrix Collision: Backend rejected overlapping vectors.");
+            alert(err.response?.data?.message || "Matrix Collision: Generation failed.");
+        } finally {
+            setGenerating(false);
+        }
+    };
+
+    const handleDeleteDay = async () => {
+        if (slots.length === 0) return;
+        if (!window.confirm(`CRITICAL: Purge entire schedule matrix for ${selectedDate}?`)) return;
+
+        setLoading(true);
+        try {
+            const bookedSlots = slots.filter(s => s.booked || s.isBooked);
+            if (bookedSlots.length > 0) {
+                alert(`⚠️ DETECTED ${bookedSlots.length} ACTIVE BOOKINGS. Associated appointments will be terminated.`);
+                
+                const apptsRes = await appointmentService.getProviderSchedule(providerId);
+                const appts = apptsRes.data || [];
+                
+                const bookedSlotIds = bookedSlots.map(s => s.slotId);
+                const toCancel = appts.filter(a => bookedSlotIds.includes(a.slotId));
+                
+                for (const appt of toCancel) {
+                    await appointmentService.cancel(appt.appointmentId);
+                }
+            }
+
+            await slotService.deleteByDate(providerId, selectedDate);
+            fetchSlots();
+        } catch (err) {
+            alert("Lock Failure: Could not clear day vectors.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleUpdate = async (slotId, isBooked) => {
+        if (isBooked && !window.confirm("CRITICAL: Rescheduling a synced vector will shift the patient's appointment time. Proceed?")) return;
+        setGenerating(true);
+        try {
+            await slotService.update(slotId, {
+                ...editForm,
+                providerId,
+                date: selectedDate,
+                durationMinutes: interval
+            });
+            setEditingSlotId(null);
+            fetchSlots();
+        } catch (err) {
+            alert("Vector Error: Timing update failed.");
         } finally {
             setGenerating(false);
         }
@@ -289,6 +348,47 @@ export const DoctorSchedule = () => {
                                         ))}
                                     </div>
                                 </div>
+                                
+                                {/* RECURRING TOGGLE */}
+                                <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 space-y-5">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">Recurring Mode</label>
+                                        <button onClick={() => setIsRecurring(!isRecurring)}
+                                            className={`w-12 h-6 rounded-full relative transition-all duration-300 p-1
+                                                ${isRecurring ? 'bg-red-600' : 'bg-zinc-200 dark:bg-zinc-800'}`}>
+                                            <div className={`w-4 h-4 bg-white rounded-full shadow-lg transition-transform ${isRecurring ? 'translate-x-6' : 'translate-x-0'}`} />
+                                        </button>
+                                    </div>
+
+                                    {isRecurring && (
+                                        <div className="space-y-5 animate-in slide-in-from-top-4 duration-300">
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black uppercase text-zinc-400 tracking-widest block">Recurrence Range (Weeks)</label>
+                                                <Input type="number" min="1" max="52" value={recurrenceWeeks} onChange={e => setRecurrenceWeeks(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black uppercase text-zinc-400 tracking-widest block">Repeat On</label>
+                                                <div className="flex justify-between gap-1">
+                                                    {[
+                                                        {id:1, l:'M'}, {id:2, l:'T'}, {id:3, l:'W'}, {id:4, l:'T'}, {id:5, l:'F'}, {id:6, l:'S'}, {id:0, l:'S'}
+                                                    ].map(d => (
+                                                        <button key={d.id} 
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                setDaysOfWeek(daysOfWeek.includes(d.id) ? daysOfWeek.filter(x=>x!==d.id) : [...daysOfWeek, d.id]);
+                                                            }}
+                                                            className={`w-9 h-9 rounded-xl text-[10px] font-black border transition-all
+                                                                ${daysOfWeek.includes(d.id) 
+                                                                    ? 'bg-red-600/10 border-red-600 text-red-500' 
+                                                                    : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-100 dark:border-zinc-800 text-zinc-400'}`}>
+                                                            {d.l}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
 
                                 <Button
                                     variant="danger"
@@ -297,7 +397,7 @@ export const DoctorSchedule = () => {
                                     isLoading={generating}
                                     disabled={startTime >= endTime || !providerId || selectedDate < new Date().toISOString().split('T')[0]}
                                 >
-                                    {!providerId ? 'LOADING IDENTITY...' : (selectedDate < new Date().toISOString().split('T')[0] ? 'DATE HAS PASSED' : (startTime >= endTime ? 'INVALID TIME ENTROPY' : 'SYNCHRONIZE VECTOR DAY'))} <ChevronRight className="ml-2" size={20} />
+                                    {!providerId ? 'LOADING IDENTITY...' : (selectedDate < new Date().toISOString().split('T')[0] ? 'DATE HAS PASSED' : (startTime >= endTime ? 'INVALID TIME ENTROPY' : (isRecurring ? 'SYNCHRONIZE VECTOR RANGE' : 'SYNCHRONIZE VECTOR DAY')))} <ChevronRight className="ml-2" size={20} />
                                 </Button>
                             </div>
                         </Card>
@@ -305,7 +405,18 @@ export const DoctorSchedule = () => {
 
                     <div className="space-y-4">
                         <div className="flex items-center justify-between px-2">
-                            <h3 className="text-sm font-black uppercase tracking-widest text-zinc-500 italic">Day Slots: {selectedDate}</h3>
+                             <div className="flex items-center gap-3">
+                                <h3 className="text-sm font-black uppercase tracking-widest text-zinc-500 italic">Day Slots: {selectedDate}</h3>
+                                {slots.length > 0 && (
+                                    <button 
+                                        onClick={handleDeleteDay}
+                                        className="p-1 px-2 rounded-lg bg-red-600/10 border border-red-600/20 text-red-500 hover:bg-red-600 hover:text-white transition-all shadow-[0_0_10px_rgba(225,29,72,0.1)]"
+                                        title="Purge all vectors for this day"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                )}
+                            </div>
                             <span className="text-[10px] font-bold px-3 py-1 bg-zinc-100 dark:bg-zinc-900 rounded-full text-zinc-400">{slots.length} Slots</span>
                         </div>
 
@@ -333,28 +444,62 @@ export const DoctorSchedule = () => {
                                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${slot.booked ? 'bg-white/20' : 'bg-red-50 dark:bg-zinc-800'}`}>
                                                     <Clock size={16} className={slot.booked ? 'text-white' : 'text-red-600'} />
                                                 </div>
-                                                <div>
-                                                    <p className="text-sm font-black italic">{slot.startTime.substring(0, 5)} — {slot.endTime.substring(0, 5)}</p>
-                                                    <p className={`text-[10px] font-bold uppercase tracking-tighter ${slot.booked ? 'text-white/80' : 'text-zinc-400'}`}>
-                                                        {slot.booked ? 'SYNCED WITH PATIENT' : slot.blocked ? 'OFFLINE MATRIX' : 'ACTIVE VECTOR'}
-                                                    </p>
-                                                </div>
+                                                {editingSlotId === slot.slotId ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <input type="time" className="bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1 text-xs text-zinc-900 dark:text-zinc-100"
+                                                            value={editForm.startTime} onChange={e => setEditForm({...editForm, startTime: e.target.value})} />
+                                                        <span className={slot.booked ? "text-white/50" : "text-zinc-500"}>—</span>
+                                                        <input type="time" className="bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1 text-xs text-zinc-900 dark:text-zinc-100"
+                                                            value={editForm.endTime} onChange={e => setEditForm({...editForm, endTime: e.target.value})} />
+                                                    </div>
+                                                ) : (
+                                                    <div>
+                                                        <p className="text-sm font-black italic">{slot.startTime.substring(0, 5)} — {slot.endTime.substring(0, 5)}</p>
+                                                        <p className={`text-[10px] font-bold uppercase tracking-tighter ${slot.booked ? 'text-white/80' : 'text-zinc-400'}`}>
+                                                            {slot.booked ? 'SYNCED WITH PATIENT' : slot.blocked ? 'OFFLINE MATRIX' : 'ACTIVE VECTOR'}
+                                                        </p>
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="flex space-x-2">
-                                                {!slot.booked && (
-                                                    <button
-                                                        onClick={() => handleBlock(slot.slotId, slot.blocked)}
-                                                        className={`p-2 rounded-lg transition-colors ${slot.booked ? 'hover:bg-white/20 text-white' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400'}`}
-                                                    >
-                                                        {slot.blocked ? <Unlock size={16} /> : <Lock size={16} />}
-                                                    </button>
+                                                {editingSlotId === slot.slotId ? (
+                                                    <>
+                                                        <button onClick={() => handleUpdate(slot.slotId, slot.booked)} className="p-2 rounded-lg bg-green-500 text-white transition-all">
+                                                            <CheckCircle2 size={16} />
+                                                        </button>
+                                                        <button onClick={() => setEditingSlotId(null)} className="p-2 rounded-lg bg-white/10 text-white transition-all">
+                                                            <X size={16} />
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        {!slot.booked && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingSlotId(slot.slotId);
+                                                                    setEditForm({ startTime: slot.startTime, endTime: slot.endTime });
+                                                                }}
+                                                                className={`p-2 rounded-lg transition-colors ${slot.booked ? 'hover:bg-white/20 text-white' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400'}`}
+                                                            >
+                                                                <Pencil size={16} />
+                                                            </button>
+                                                        )}
+                                                        {!slot.booked && (
+                                                            <button
+                                                                onClick={() => handleBlock(slot.slotId, slot.blocked)}
+                                                                className={`p-2 rounded-lg transition-colors ${slot.booked ? 'hover:bg-white/20 text-white' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400'}`}
+                                                            >
+                                                                {slot.blocked ? <Unlock size={16} /> : <Lock size={16} />}
+                                                            </button>
+                                                        )}
+                                                        <button
+                                                            onClick={() => handleDelete(slot.slotId, slot.booked)}
+                                                            className={`p-2 rounded-lg transition-colors ${slot.booked ? 'hover:bg-white/20 text-white' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400'}`}
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </>
                                                 )}
-                                                <button
-                                                    onClick={() => handleDelete(slot.slotId, slot.booked)}
-                                                    className={`p-2 rounded-lg transition-colors ${slot.booked ? 'hover:bg-white/20 text-white' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400'}`}
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
                                             </div>
                                         </div>
 

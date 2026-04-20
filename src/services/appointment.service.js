@@ -17,4 +17,5 @@ export const appointmentService = {
   
   // Patient Endpoints
   getByUser: (userId) => api.get(`${APPOINTMENT_URL}/patient/${userId}`),
+  reschedule: (id, data) => api.put(`${APPOINTMENT_URL}/${id}/reschedule`, data),
 };

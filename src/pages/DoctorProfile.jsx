@@ -93,17 +93,31 @@ export const DoctorProfile = () => {
       alert("Authorization Discordance: Only Medical Entities with 'PATIENT' status can bind to these vectors.");
       return;
     }
+
+    const rescheduleId = new URLSearchParams(window.location.search).get('rescheduleId');
     setBooking(true);
+    
     try {
-      await appointmentService.create({
-        providerId: doctor.providerId,
-        slotId: slot.slotId,
-        appointmentDateTime: `${selectedDate}T${slot.startTime}`,
-        reason: 'Regular Checkup'
-      });
+      if (rescheduleId) {
+        await appointmentService.reschedule(rescheduleId, {
+          providerId: doctor.providerId,
+          slotId: slot.slotId,
+          appointmentDateTime: `${selectedDate}T${slot.startTime}`,
+          reason: 'Rescheduled Appointment'
+        });
+        alert("✅ Appointment Vector successfully shifted.");
+      } else {
+        await appointmentService.create({
+          providerId: doctor.providerId,
+          slotId: slot.slotId,
+          appointmentDateTime: `${selectedDate}T${slot.startTime}`,
+          reason: 'Regular Checkup'
+        });
+        alert("✅ Medical Vector Synchronized.");
+      }
       navigate('/appointments');
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to book slot');
+      alert(err.response?.data?.message || 'Failed to process request');
     } finally {
       setBooking(false);
     }
