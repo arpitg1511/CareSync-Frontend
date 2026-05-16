@@ -35,7 +35,7 @@ export const Home = () => {
           </div>
           
           <h1 className="text-5xl md:text-8xl font-black tracking-tighter text-zinc-900 dark:text-white leading-[0.9] md:leading-[1.1]">
-            Your Health, <span className="bg-clip-text text-transparent bg-gradient-to-r from-red-600 to-red-400">Syncronized</span>.
+            Your Health, <span className="bg-clip-text text-transparent bg-gradient-to-r from-red-600 to-red-400">Synchronized.</span>
           </h1>
           
           <p className="text-lg md:text-xl text-zinc-500 dark:text-zinc-400 max-w-2xl mx-auto leading-relaxed font-medium">

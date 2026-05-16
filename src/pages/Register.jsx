@@ -85,7 +85,7 @@ export const Register = () => {
                 className={`flex-1 flex items-center justify-center py-2.5 rounded-xl text-sm font-black transition-all ${role === 'DOCTOR' ? 'bg-white dark:bg-zinc-700 shadow-md text-red-600' : 'text-zinc-500 hover:text-red-600'}`}
                 onClick={() => setRole('DOCTOR')}
               >
-                <Stethoscope className="w-4 h-4 mr-2" /> Medical Proxy
+                <Stethoscope className="w-4 h-4 mr-2" /> Medical Entity
               </button>
             </div>
 
